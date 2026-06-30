@@ -13,14 +13,83 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/api"
+	promApi "github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+	kubeApi "k8s.io/client-go/tools/clientcmd/api"
 )
 
-func startMeasurement(measurement Measurement, wg *sync.WaitGroup) {
+func startSameClusterMeasurements(clusterId string, measurements []Measurement, config kubeApi.Config, ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	// clusterId <=> context name mapping
+	contextName := clusterId
+	configOverrides := &clientcmd.ConfigOverrides{
+		CurrentContext: contextName,
+	}
+
+	clientConfig := clientcmd.NewNonInteractiveClientConfig(
+		config,
+		contextName,
+		configOverrides,
+		nil,
+	)
+
+	// Use the selected context (based on id)
+	kubeCfg, err := clientConfig.ClientConfig()
+	if err != nil {
+		panic(err)
+	}
+
+	// create the clientset
+	clientset, kubeErr := kubernetes.NewForConfig(kubeCfg)
+	if kubeErr != nil {
+		panic(kubeErr.Error())
+	}
+
+	// Dynamic client (for Gateway CRD)
+	dynClient, err := dynamic.NewForConfig(kubeCfg)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, measurement := range measurements {
+		turnServerAddress := "turn://user-1:pass-1@"
+
+		// Get the TURN server IP and port
+		turnIP, err := getTurnServerIP(clientset, ctx)
+		if err != nil {
+			panic(err)
+		}
+
+		turnPort, err := getTurnServerPortFromGateway(dynClient, ctx)
+		if err != nil {
+			panic(err)
+		}
+
+		turnServerAddress += fmt.Sprintf("%s:", turnIP)
+		turnServerAddress += fmt.Sprintf("%s?transport=udp", turnPort)
+
+		// Get Iperf cluster peer host address
+		peerHostAddress, err := getIperfServerClusterIP(clientset, ctx, true)
+		if err != nil {
+			panic(err)
+		}
+
+		measurement.Turncat.PeerHostAddress = peerHostAddress
+		measurement.Turncat.TurnServerAddress = turnServerAddress
+
+		// Start in a separate goroutine to allow multiple measurements to run concurrently
+		wg.Add(1)
+		startMeasurement(measurement)
+	}
+
+}
+
+func startMeasurement(measurement Measurement) {
 	// This function will start the measurement based on the configuration
 	// It will start turncat and the load generator with the appropriate parameters
 	clientAddress := fmt.Sprintf("udp://%s:%d", measurement.Client.Host, measurement.Client.Port)
@@ -62,7 +131,7 @@ func startMeasurement(measurement Measurement, wg *sync.WaitGroup) {
 	slog.Info("Shutting down turncat", "measurement", measurement.Name)
 	turncat.Process.Kill()
 
-	// Run styx to save prometheus data
+	// Get data from prometheus
 	slog.Info("Fetching prometheus data", "measurement", measurement.Name)
 	bufferTime := 5 * time.Minute
 	savePrometheusData(measurement.Name, startTime, endTime, bufferTime)
@@ -117,14 +186,14 @@ func runPrometheusQuery(query, outputFile string, start, end time.Time) {
 	step := 1 * time.Second
 
 	// --- Prometheus client ---
-	client, err := api.NewClient(api.Config{Address: prometheusURL})
+	client, err := promApi.NewClient(promApi.Config{Address: prometheusURL})
 	if err != nil {
 		panic(fmt.Sprintf("error creating prometheus client: %v", err))
 	}
-	promAPI := v1.NewAPI(client)
+	prometheusAPI := v1.NewAPI(client)
 
 	// --- Query range ---
-	result, warnings, err := promAPI.QueryRange(context.Background(), query, v1.Range{
+	result, warnings, err := prometheusAPI.QueryRange(context.Background(), query, v1.Range{
 		Start: start,
 		End:   end,
 		Step:  step,
