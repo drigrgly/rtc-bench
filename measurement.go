@@ -139,6 +139,14 @@ func startMeasurement(cluster *Cluster, measurement Measurement) {
 		// Get data from prometheus
 		slog.Info("Fetching prometheus data", "measurement", measurement.Name)
 		individualMeasurementMetaData.BufferTime = 5 * time.Minute
+
+		clusterCollectionName := fmt.Sprintf("%s-%s", cluster.ClusterId, metaData.InitialStartTime.Format("2006-01-01"))
+		hours, minutes, sec := metaData.InitialStartTime.Clock()
+		measurementCollectionName := fmt.Sprintf("%s-%s", metaData.Measurement.Name, fmt.Sprintf("%02d%02d%02d", hours, minutes, sec))
+
+		collectionOutputDir := filepath.Join("results", clusterCollectionName, measurementCollectionName)
+		metaData.CollectionOutputDir = collectionOutputDir
+
 		metaData.IndividualMeasurements = append(metaData.IndividualMeasurements, individualMeasurementMetaData)
 
 		savePrometheusData(cluster, &metaData, i)
@@ -148,13 +156,7 @@ func startMeasurement(cluster *Cluster, measurement Measurement) {
 }
 
 func savePrometheusData(cluster *Cluster, measurementMetaData *MeasurementMetaData, count int) {
-
-	clusterCollectionName := fmt.Sprintf("%s-%s", cluster.ClusterId, measurementMetaData.InitialStartTime.Format("2006-01-01"))
-	hours, minutes, sec := measurementMetaData.InitialStartTime.Clock()
-	measurementCollectionName := fmt.Sprintf("%s-%s", measurementMetaData.Measurement.Name, fmt.Sprintf("%02d%02d%02d", hours, minutes, sec))
-
-	collectionOutputDir := filepath.Join("results", clusterCollectionName, measurementCollectionName)
-	err := os.MkdirAll(collectionOutputDir, 0755)
+	err := os.MkdirAll(measurementMetaData.CollectionOutputDir, 0755)
 	if err != nil {
 		slog.Error("Error creating output directory", "error", err)
 		return
@@ -180,7 +182,7 @@ func savePrometheusData(cluster *Cluster, measurementMetaData *MeasurementMetaDa
 	queries := measurementMetaData.Measurement.Queries
 
 	for _, query := range queries {
-		outputDir := filepath.Join(collectionOutputDir, query.Name)
+		outputDir := filepath.Join(measurementMetaData.CollectionOutputDir, query.Name)
 		err := os.MkdirAll(outputDir, 0755)
 		if err != nil {
 			slog.Error("Error creating output directory for query", "error", err)
@@ -191,7 +193,8 @@ func savePrometheusData(cluster *Cluster, measurementMetaData *MeasurementMetaDa
 		runPrometheusQuery(cluster.Host, query.Query, outputFile, startTime, endTime)
 	}
 
-	slog.Info("Prometheus data saved", "directory", collectionOutputDir)
+	saveMetadata(measurementMetaData)
+	slog.Info("Prometheus data saved", "directory", measurementMetaData.CollectionOutputDir)
 }
 
 func runPrometheusQuery(host, query, outputFile string, start, end time.Time) {
@@ -305,6 +308,17 @@ func runPrometheusQuery(host, query, outputFile string, start, end time.Time) {
 
 }
 
-func saveMetadata(measurement Measurement, metaData MeasurementMetaData) {
+func saveMetadata(MeasurementMetaData *MeasurementMetaData) {
+	formattedInfo := FormatMeasurementInfo(MeasurementMetaData)
 
+	f, err := os.Create(filepath.Join(MeasurementMetaData.CollectionOutputDir, "metadata.txt"))
+	if err != nil {
+		panic(fmt.Sprintf("error creating metadata file: %v", err))
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(formattedInfo)
+	if err != nil {
+		panic(fmt.Sprintf("error writing metadata: %v", err))
+	}
 }

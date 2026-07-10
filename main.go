@@ -65,6 +65,7 @@ type LoadGenerator struct {
 
 type MeasurementMetaData struct {
 	Measurement            *Measurement
+	CollectionOutputDir    string
 	TurncatClientAddress   string
 	TurnServerAddress      string
 	PeerAddress            string

@@ -24,3 +24,20 @@ func LogFormatted(formattedString string) {
 		slog.Info(line)
 	}
 }
+
+func FormatMeasurementInfo(measurementMetaData *MeasurementMetaData) string {
+	var sb strings.Builder
+	connectionInfo := FormatConnectionInfo(measurementMetaData.TurncatClientAddress, measurementMetaData.TurnServerAddress, measurementMetaData.PeerAddress)
+
+	sb.WriteString("--- Measurement Information ---\n")
+	sb.WriteString("Queries:\n")
+	for _, query := range measurementMetaData.Measurement.Queries {
+		sb.WriteString(fmt.Sprintf("  - %s\n", query.Name))
+	}
+	sb.WriteString("-------------------------------\n")
+	sb.WriteString("\n")
+	sb.WriteString(connectionInfo)
+	sb.WriteString("\n")
+
+	return sb.String()
+}
