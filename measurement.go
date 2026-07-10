@@ -22,7 +22,7 @@ import (
 	kubeApi "k8s.io/client-go/tools/clientcmd/api"
 )
 
-func startSameClusterMeasurements(cluster Cluster, config kubeApi.Config, ctx context.Context, wg *sync.WaitGroup) {
+func StartSameClusterMeasurements(cluster *Cluster, config *kubeApi.Config, ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	// clusterId <=> context name mapping
@@ -32,7 +32,7 @@ func startSameClusterMeasurements(cluster Cluster, config kubeApi.Config, ctx co
 	}
 
 	clientConfig := clientcmd.NewNonInteractiveClientConfig(
-		config,
+		*config,
 		contextName,
 		configOverrides,
 		nil,
@@ -41,24 +41,28 @@ func startSameClusterMeasurements(cluster Cluster, config kubeApi.Config, ctx co
 	// Use the selected context (based on id)
 	kubeCfg, err := clientConfig.ClientConfig()
 	if err != nil {
+		slog.Error("Error creating client config", "error", err)
 		panic(err)
 	}
 
 	// create the clientset
 	clientset, kubeErr := kubernetes.NewForConfig(kubeCfg)
 	if kubeErr != nil {
+		slog.Error("Error creating clientset", "error", kubeErr)
 		panic(kubeErr.Error())
 	}
 
 	// Dynamic client (for Gateway CRD)
 	dynClient, err := dynamic.NewForConfig(kubeCfg)
 	if err != nil {
+		slog.Error("Error creating dynamic client", "error", err)
 		panic(err)
 	}
 
 	// Get Iperf cluster peer address
 	peerHost, peerPort, err := getIperfServerClusterIP(clientset, ctx, true)
 	if err != nil {
+		slog.Error("Error fetching Iperf server cluster IP", "error", err)
 		panic(err)
 	}
 
@@ -85,12 +89,14 @@ func startSameClusterMeasurements(cluster Cluster, config kubeApi.Config, ctx co
 
 }
 
-func startMeasurement(cluster Cluster, measurement Measurement) {
+func startMeasurement(cluster *Cluster, measurement Measurement) {
+	metaData := MeasurementMetaData{
+		InitialStartTime: time.Now(),
+		Measurement:      &measurement,
+	}
 
 	// Construct the client server address
 	turncatClientAddress := fmt.Sprintf("udp://%s:%s", cluster.TurncatClient.Host, cluster.TurncatClient.Port)
-
-	//turnServerAddress := fmt.Sprintf("turn://%s:%s@%s:%s?transport=udp", turncatUsername, turncatPassword, cluster.TurnServer.Host, cluster.TurnServer.Port)
 
 	// Redact the password in the log
 	redactedTurnServerAddress := fmt.Sprintf("turn://%s:%s@%s:%s?transport=udp", "***", "***", cluster.TurnServer.Host, cluster.TurnServer.Port)
@@ -98,45 +104,66 @@ func startMeasurement(cluster Cluster, measurement Measurement) {
 	// Construct the peer address
 	peerAddress := fmt.Sprintf("udp://%s:%s", cluster.Peer.Host, cluster.Peer.Port)
 
-	slog.Info("Measurement configuration", "name", measurement.Name, "Turncat client", turncatClientAddress, "peer", peerAddress, "Turn server", redactedTurnServerAddress)
+	//Save information about the measurement
+	metaData.TurncatClientAddress = turncatClientAddress
+	metaData.TurnServerAddress = redactedTurnServerAddress
+	metaData.PeerAddress = peerAddress
 
-	// Save start time
-	startTime := time.Now()
-	slog.Info("Measurement start time", "time", startTime.Format(time.RFC3339))
+	LogFormatted(FormatConnectionInfo(turncatClientAddress, redactedTurnServerAddress, peerAddress))
 
-	// Print loadGenerator
-	slog.Info("Starting load generator", "command", measurement.LoadGenerator.Command, "args", measurement.LoadGenerator.Args)
+	for _, i := 0, 0; i < measurement.Repeat; i++ {
+		// Save information about each individual measurement
+		individualMeasurementMetaData := IndividualMeasurementMetaData{
+			Count: i,
+		}
 
-	loadGenerator := exec.Command(measurement.LoadGenerator.Command, measurement.LoadGenerator.Args...)
-	loadGenerator.Stdout = os.Stdout
+		// Save start time
+		individualMeasurementMetaData.StartTime = time.Now()
+		slog.Info("Measurement start time", "time", individualMeasurementMetaData.StartTime)
 
-	err := loadGenerator.Start()
-	if err != nil {
-		panic(fmt.Errorf("fatal error starting load generator '%s': %w", measurement.LoadGenerator.Command, err))
+		slog.Info("Starting load generator", "command", measurement.LoadGenerator.Command, "args", measurement.LoadGenerator.Args)
+		loadGenerator := exec.Command(measurement.LoadGenerator.Command, measurement.LoadGenerator.Args...)
+
+		loadGenerator.Stdout = os.Stdout
+		err := loadGenerator.Start()
+		if err != nil {
+			panic(fmt.Errorf("fatal error starting load generator '%s': %w", measurement.LoadGenerator.Command, err))
+		}
+		loadGenerator.Wait()
+
+		// Save end time
+		individualMeasurementMetaData.EndTime = time.Now()
+
+		slog.Info("Measurement end time", "time", individualMeasurementMetaData.EndTime)
+
+		// Get data from prometheus
+		slog.Info("Fetching prometheus data", "measurement", measurement.Name)
+		individualMeasurementMetaData.BufferTime = 5 * time.Minute
+		metaData.IndividualMeasurements = append(metaData.IndividualMeasurements, individualMeasurementMetaData)
+
+		savePrometheusData(cluster, &metaData, i)
 	}
-
-	loadGenerator.Wait()
-
-	// Save end time
-	endTime := time.Now()
-	slog.Info("Measurement end time", "time", endTime.Format(time.RFC3339))
-
-	// Get data from prometheus
-	slog.Info("Fetching prometheus data", "measurement", measurement.Name)
-	bufferTime := 5 * time.Minute
-	savePrometheusData(cluster.Host, measurement.Name, startTime, endTime, bufferTime)
 
 	slog.Info("Measurement completed", "measurement", measurement.Name)
 }
 
-func savePrometheusData(clusterHost string, measurementName string, startTime, endTime time.Time, bufferTime time.Duration) {
-	// Create output directory if it doesn't exist
-	outputDir := filepath.Join("results", measurementName)
-	err := os.MkdirAll(outputDir, 0755)
+func savePrometheusData(cluster *Cluster, measurementMetaData *MeasurementMetaData, count int) {
+
+	clusterCollectionName := fmt.Sprintf("%s-%s", cluster.ClusterId, measurementMetaData.InitialStartTime.Format("2006-01-01"))
+	hours, minutes, sec := measurementMetaData.InitialStartTime.Clock()
+	measurementCollectionName := fmt.Sprintf("%s-%s", measurementMetaData.Measurement.Name, fmt.Sprintf("%02d%02d%02d", hours, minutes, sec))
+
+	collectionOutputDir := filepath.Join("results", clusterCollectionName, measurementCollectionName)
+	err := os.MkdirAll(collectionOutputDir, 0755)
 	if err != nil {
 		slog.Error("Error creating output directory", "error", err)
 		return
 	}
+
+	currentRepeatData := measurementMetaData.IndividualMeasurements[count]
+	startTime := currentRepeatData.StartTime
+	endTime := currentRepeatData.EndTime
+	bufferTime := currentRepeatData.BufferTime
 
 	// Add buffer time before start and after end to capture metrics
 	bufferedStart := startTime.Add(-bufferTime)
@@ -150,24 +177,21 @@ func savePrometheusData(clusterHost string, measurementName string, startTime, e
 
 	slog.Info("Running styx query", "start", startStr, "duration", durationStr)
 
-	// CPU query
-	cpuQuery := "sum(rate(container_cpu_usage_seconds_total[5m])) by (namespace)"
-	cpuFile := filepath.Join(outputDir, "cpu_by_namespace.csv")
-	runPrometheusQuery(clusterHost, cpuQuery, cpuFile, startTime, endTime)
-	// err = runStyxQuery(cpuQuery, startStr, durationStr, cpuFile)
-	// if err != nil {
-	// 	slog.Error("Error fetching CPU data", "error", err)
-	// }
+	queries := measurementMetaData.Measurement.Queries
 
-	// Memory query
-	memQuery := "sum(container_memory_working_set_bytes) by (namespace) / 1024 / 1024 / 1024"
-	memFile := filepath.Join(outputDir, "memory_by_namespace.csv")
-	runPrometheusQuery(clusterHost, memQuery, memFile, bufferedStart, endTime)
-	// if err != nil {
-	// 	slog.Error("Error fetching memory data", "error", err)
-	// }
+	for _, query := range queries {
+		outputDir := filepath.Join(collectionOutputDir, query.Name)
+		err := os.MkdirAll(outputDir, 0755)
+		if err != nil {
+			slog.Error("Error creating output directory for query", "error", err)
+			return
+		}
 
-	slog.Info("Prometheus data saved", "directory", outputDir)
+		outputFile := filepath.Join(outputDir, fmt.Sprintf("%s-%d.csv", query.Name, count))
+		runPrometheusQuery(cluster.Host, query.Query, outputFile, startTime, endTime)
+	}
+
+	slog.Info("Prometheus data saved", "directory", collectionOutputDir)
 }
 
 func runPrometheusQuery(host, query, outputFile string, start, end time.Time) {
@@ -278,5 +302,9 @@ func runPrometheusQuery(host, query, outputFile string, start, end time.Time) {
 		}
 
 	}
+
+}
+
+func saveMetadata(measurement Measurement, metaData MeasurementMetaData) {
 
 }

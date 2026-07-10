@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/spf13/viper"
 
@@ -20,13 +21,12 @@ type Config struct {
 }
 
 type Cluster struct {
-	ClusterId     string            `mapstructure:"cluster-id"`
-	Host          string            `mapstructure:"host"`
-	TurncatClient TurncatClient     `mapstructure:"turncat-client"`
-	TurnServer    TurnServer        `mapstructure:"turn-server"`
-	Queries       []PrometheusQuery `mapstructure:"queries"`
-	Measurements  []Measurement     `mapstructure:"measurements"`
-	Peer          Peer              `mapstructure:"peer"`
+	ClusterId     string        `mapstructure:"cluster-id"`
+	Host          string        `mapstructure:"host"`
+	TurncatClient TurncatClient `mapstructure:"turncat-client"`
+	TurnServer    TurnServer    `mapstructure:"turn-server"` //Debug and documentation purposes
+	Measurements  []Measurement `mapstructure:"measurements"`
+	Peer          Peer          `mapstructure:"peer"` //Debug and documentation purposes
 }
 
 type TurncatClient struct {
@@ -51,20 +51,32 @@ type PrometheusQuery struct {
 }
 
 type Measurement struct {
-	Name          string        `mapstructure:"name"`
-	Repeat        int           `mapstructure:"repeat"`
-	LoadGenerator LoadGenerator `mapstructure:"load-generator"`
-	Offloading    string        `mapstructure:"offloading"`
-}
-
-type ClientServer struct {
-	Host string `mapstructure:"host"`
-	Port int    `mapstructure:"port"`
+	Name          string            `mapstructure:"name"`
+	Repeat        int               `mapstructure:"repeat"`
+	LoadGenerator LoadGenerator     `mapstructure:"load-generator"`
+	Offloading    string            `mapstructure:"offloading"`
+	Queries       []PrometheusQuery `mapstructure:"queries"`
 }
 
 type LoadGenerator struct {
 	Command string   `mapstructure:"command"`
 	Args    []string `mapstructure:"args"`
+}
+
+type MeasurementMetaData struct {
+	Measurement            *Measurement
+	TurncatClientAddress   string
+	TurnServerAddress      string
+	PeerAddress            string
+	InitialStartTime       time.Time
+	IndividualMeasurements []IndividualMeasurementMetaData
+}
+
+type IndividualMeasurementMetaData struct {
+	Count      int
+	StartTime  time.Time
+	EndTime    time.Time
+	BufferTime time.Duration
 }
 
 func main() {
@@ -109,13 +121,14 @@ func main() {
 
 	config, err := loadingRules.Load()
 	if err != nil {
+		slog.Error("Error loading kubeconfig", "error", err)
 		panic(err)
 	}
 
 	// Start measurements for each cluster concurrently
 	for _, cluster := range cfg.Clusters {
 		wg.Add(1)
-		go startSameClusterMeasurements(cluster, *config, ctx, &wg)
+		go StartSameClusterMeasurements(&cluster, config, ctx, &wg)
 	}
 	wg.Wait()
 }
