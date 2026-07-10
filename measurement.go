@@ -22,11 +22,11 @@ import (
 	kubeApi "k8s.io/client-go/tools/clientcmd/api"
 )
 
-func startSameClusterMeasurements(clusterId string, measurements []Measurement, config kubeApi.Config, ctx context.Context, wg *sync.WaitGroup) {
+func startSameClusterMeasurements(cluster Cluster, config kubeApi.Config, ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	// clusterId <=> context name mapping
-	contextName := clusterId
+	contextName := cluster.ClusterId
 	configOverrides := &clientcmd.ConfigOverrides{
 		CurrentContext: contextName,
 	}
@@ -56,51 +56,49 @@ func startSameClusterMeasurements(clusterId string, measurements []Measurement, 
 		panic(err)
 	}
 
-	for _, measurement := range measurements {
-		turnServerAddress := "turn://user-1:pass-1@"
+	// Get Iperf cluster peer address
+	peerHost, peerPort, err := getIperfServerClusterIP(clientset, ctx, true)
+	if err != nil {
+		panic(err)
+	}
 
-		// Get the TURN server IP and port
-		turnIP, err := getTurnServerIP(clientset, ctx)
-		if err != nil {
-			panic(err)
-		}
+	cluster.Peer.Host = peerHost
+	cluster.Peer.Port = peerPort
 
-		turnPort, err := getTurnServerPortFromGateway(dynClient, ctx)
-		if err != nil {
-			panic(err)
-		}
+	// Get the TURN server IP and port
+	turnIP, err := getTurnServerIP(clientset, ctx)
+	if err != nil {
+		panic(err)
+	}
 
-		turnServerAddress += fmt.Sprintf("%s:", turnIP)
-		turnServerAddress += fmt.Sprintf("%s?transport=udp", turnPort)
+	turnPort, err := getTurnServerPortFromGateway(dynClient, ctx)
+	if err != nil {
+		panic(err)
+	}
 
-		// Get Iperf cluster peer host address
-		peerHostAddress, err := getIperfServerClusterIP(clientset, ctx, true)
-		if err != nil {
-			panic(err)
-		}
+	cluster.TurnServer.Host = turnIP
+	cluster.TurnServer.Port = turnPort
 
-		measurement.Turncat.PeerHostAddress = peerHostAddress
-		measurement.Turncat.TurnServerAddress = turnServerAddress
-
-		// Start in a separate goroutine to allow multiple measurements to run concurrently
-		wg.Add(1)
-		startMeasurement(measurement)
+	for _, measurement := range cluster.Measurements {
+		startMeasurement(cluster, measurement)
 	}
 
 }
 
-func startMeasurement(measurement Measurement) {
-	// This function will start the measurement based on the configuration
-	// It will start turncat and the load generator with the appropriate parameters
-	clientAddress := fmt.Sprintf("udp://%s:%d", measurement.Client.Host, measurement.Client.Port)
+func startMeasurement(cluster Cluster, measurement Measurement) {
 
-	slog.Info("Measurement configuration", "name", measurement.Name, "client", fmt.Sprintf("%s:%d", measurement.Client.Host, measurement.Client.Port), "peer", measurement.Turncat.PeerHostAddress, "turn_server", measurement.Turncat.TurnServerAddress)
+	// Construct the client server address
+	turncatClientAddress := fmt.Sprintf("udp://%s:%s", cluster.TurncatClient.Host, cluster.TurncatClient.Port)
 
-	slog.Info("Starting turncat")
+	//turnServerAddress := fmt.Sprintf("turn://%s:%s@%s:%s?transport=udp", turncatUsername, turncatPassword, cluster.TurnServer.Host, cluster.TurnServer.Port)
 
-	// Get the authentication information for turncat
-	turncat := exec.Command("turncat", "--log=all:INFO", clientAddress, measurement.Turncat.TurnServerAddress, measurement.Turncat.PeerHostAddress)
-	turncat.Stdout = os.Stdout
+	// Redact the password in the log
+	redactedTurnServerAddress := fmt.Sprintf("turn://%s:%s@%s:%s?transport=udp", "***", "***", cluster.TurnServer.Host, cluster.TurnServer.Port)
+
+	// Construct the peer address
+	peerAddress := fmt.Sprintf("udp://%s:%s", cluster.Peer.Host, cluster.Peer.Port)
+
+	slog.Info("Measurement configuration", "name", measurement.Name, "Turncat client", turncatClientAddress, "peer", peerAddress, "Turn server", redactedTurnServerAddress)
 
 	// Save start time
 	startTime := time.Now()
@@ -112,12 +110,7 @@ func startMeasurement(measurement Measurement) {
 	loadGenerator := exec.Command(measurement.LoadGenerator.Command, measurement.LoadGenerator.Args...)
 	loadGenerator.Stdout = os.Stdout
 
-	err := turncat.Start()
-	if err != nil {
-		panic(fmt.Errorf("fatal error starting turncat: %w", err))
-	}
-
-	err = loadGenerator.Start()
+	err := loadGenerator.Start()
 	if err != nil {
 		panic(fmt.Errorf("fatal error starting load generator '%s': %w", measurement.LoadGenerator.Command, err))
 	}
@@ -128,18 +121,15 @@ func startMeasurement(measurement Measurement) {
 	endTime := time.Now()
 	slog.Info("Measurement end time", "time", endTime.Format(time.RFC3339))
 
-	slog.Info("Shutting down turncat", "measurement", measurement.Name)
-	turncat.Process.Kill()
-
 	// Get data from prometheus
 	slog.Info("Fetching prometheus data", "measurement", measurement.Name)
 	bufferTime := 5 * time.Minute
-	savePrometheusData(measurement.Name, startTime, endTime, bufferTime)
+	savePrometheusData(cluster.Host, measurement.Name, startTime, endTime, bufferTime)
 
 	slog.Info("Measurement completed", "measurement", measurement.Name)
 }
 
-func savePrometheusData(measurementName string, startTime, endTime time.Time, bufferTime time.Duration) {
+func savePrometheusData(clusterHost string, measurementName string, startTime, endTime time.Time, bufferTime time.Duration) {
 	// Create output directory if it doesn't exist
 	outputDir := filepath.Join("results", measurementName)
 	err := os.MkdirAll(outputDir, 0755)
@@ -163,7 +153,7 @@ func savePrometheusData(measurementName string, startTime, endTime time.Time, bu
 	// CPU query
 	cpuQuery := "sum(rate(container_cpu_usage_seconds_total[5m])) by (namespace)"
 	cpuFile := filepath.Join(outputDir, "cpu_by_namespace.csv")
-	runPrometheusQuery(cpuQuery, cpuFile, startTime, endTime)
+	runPrometheusQuery(clusterHost, cpuQuery, cpuFile, startTime, endTime)
 	// err = runStyxQuery(cpuQuery, startStr, durationStr, cpuFile)
 	// if err != nil {
 	// 	slog.Error("Error fetching CPU data", "error", err)
@@ -172,7 +162,7 @@ func savePrometheusData(measurementName string, startTime, endTime time.Time, bu
 	// Memory query
 	memQuery := "sum(container_memory_working_set_bytes) by (namespace) / 1024 / 1024 / 1024"
 	memFile := filepath.Join(outputDir, "memory_by_namespace.csv")
-	runPrometheusQuery(memQuery, memFile, bufferedStart, endTime)
+	runPrometheusQuery(clusterHost, memQuery, memFile, bufferedStart, endTime)
 	// if err != nil {
 	// 	slog.Error("Error fetching memory data", "error", err)
 	// }
@@ -180,9 +170,9 @@ func savePrometheusData(measurementName string, startTime, endTime time.Time, bu
 	slog.Info("Prometheus data saved", "directory", outputDir)
 }
 
-func runPrometheusQuery(query, outputFile string, start, end time.Time) {
+func runPrometheusQuery(host, query, outputFile string, start, end time.Time) {
 	// --- Config ---
-	prometheusURL := "http://localhost:9090"
+	prometheusURL := fmt.Sprintf("http://%s:9090", host)
 	step := 1 * time.Second
 
 	// --- Prometheus client ---

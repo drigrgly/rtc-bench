@@ -11,25 +11,18 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func getIperfServerClusterIP(clientset *kubernetes.Clientset, ctx context.Context, isUdp bool) (string, error) {
-	var peerHostAddress string
-	if isUdp {
-		peerHostAddress = "udp://"
-	} else {
-		peerHostAddress = "tcp://"
-	}
-
+func getIperfServerClusterIP(clientset *kubernetes.Clientset, ctx context.Context, isUdp bool) (string, string, error) {
 	iperfSvc, err := clientset.CoreV1().
 		Services("default").
 		Get(ctx, "iperf-server", metav1.GetOptions{})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	peerIP := iperfSvc.Spec.ClusterIP
-	peerHostAddress += fmt.Sprintf("%s:5001", peerIP)
+	peerPort := iperfSvc.Spec.Ports[0].Port
 
-	return peerHostAddress, nil
+	return peerIP, fmt.Sprintf("%d", peerPort), nil
 }
 
 func getTurnServerIP(clientset *kubernetes.Clientset, ctx context.Context) (string, error) {

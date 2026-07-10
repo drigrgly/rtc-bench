@@ -1,17 +1,25 @@
-measurements:
-  - name: short-measurement
-    cluster-id: laptop
-    client:
-        host: 127.0.0.1
-        port: 5000
-    turncat:
+clusters:
+  - cluster-id: laptop
+    host: &host 192.168.1.86
+    turncat-client:
       log: "all:INFO"
-      # Other info is gathered by the go script
-    load-generator: 
-      command: iperf
-      args: ["-c", "localhost", "-p", "5000", "-u", "-i", "1", "-l", "100", "-b", "800000", "-t", "100", "-e"]
-    queries:
+      host: *host
+      port: &turnPort 5000
+    turn-server: # Filled by the go script
+      host: 
+      port: 
+    peer: # Filled by the go script
+      host: 
+      port: 
+    queries: # Queries to be executed on the cluster. The results will be stored in the measurement results.
       - name: cpu-usage
         query: sum(rate(container_cpu_usage_seconds_total[5m])) by (namespace)
       - name: memory-usage
         query: sum(container_memory_working_set_bytes) by (namespace) / 1024 / 1024 / 1024
+    measurements:
+      - name: short-measurement
+        repeat: 4
+        offloading: TC # TC: eBPF/TC | XDP: eBPF/XDP | NONE: no offloading
+        load-generator: 
+          command: iperf
+          args: ["-c", *host, "-p", *turnPort, "-u", "-i", "1", "-l", "100", "-b", "800000", "-t", "10", "-e"]

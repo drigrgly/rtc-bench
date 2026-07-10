@@ -16,15 +16,45 @@ import (
 )
 
 type Config struct {
-	Measurements []Measurement `mapstructure:"measurements"`
+	Clusters []Cluster `mapstructure:"clusters"`
+}
+
+type Cluster struct {
+	ClusterId     string            `mapstructure:"cluster-id"`
+	Host          string            `mapstructure:"host"`
+	TurncatClient TurncatClient     `mapstructure:"turncat-client"`
+	TurnServer    TurnServer        `mapstructure:"turn-server"`
+	Queries       []PrometheusQuery `mapstructure:"queries"`
+	Measurements  []Measurement     `mapstructure:"measurements"`
+	Peer          Peer              `mapstructure:"peer"`
+}
+
+type TurncatClient struct {
+	Log  string `mapstructure:"log"`
+	Host string `mapstructure:"host"`
+	Port string `mapstructure:"port"`
+}
+
+type TurnServer struct {
+	Host string `mapstructure:"host"`
+	Port string `mapstructure:"port"`
+}
+
+type Peer struct {
+	Host string `mapstructure:"host"`
+	Port string `mapstructure:"port"`
+}
+
+type PrometheusQuery struct {
+	Name  string `mapstructure:"name"`
+	Query string `mapstructure:"query"`
 }
 
 type Measurement struct {
 	Name          string        `mapstructure:"name"`
-	ClusterId     string        `mapstructure:"cluster-id"`
-	Client        ClientServer  `mapstructure:"client"`
+	Repeat        int           `mapstructure:"repeat"`
 	LoadGenerator LoadGenerator `mapstructure:"load-generator"`
-	Turncat       Turncat       `mapstructure:"turncat"`
+	Offloading    string        `mapstructure:"offloading"`
 }
 
 type ClientServer struct {
@@ -35,13 +65,6 @@ type ClientServer struct {
 type LoadGenerator struct {
 	Command string   `mapstructure:"command"`
 	Args    []string `mapstructure:"args"`
-}
-
-type Turncat struct {
-	Log               string `mapstructure:"log"`
-	ClientAddress     string `mapstructure:"clientAddress"`
-	TurnServerAddress string `mapstructure:"turnServerAddress"`
-	PeerHostAddress   string `mapstructure:"peerHostAddress"`
 }
 
 func main() {
@@ -78,17 +101,6 @@ func main() {
 		panic(fmt.Errorf("fatal error unmarshaling file: %w", err))
 	}
 
-	// Separate the measurements based on the cluster id
-	clusterMeasurements := make(map[string][]Measurement)
-	for _, measurement := range cfg.Measurements {
-		clusterMeasurements[measurement.ClusterId] = append(clusterMeasurements[measurement.ClusterId], measurement)
-	}
-
-	clusterIds := make([]string, 0, len(clusterMeasurements))
-	for id := range clusterMeasurements {
-		clusterIds = append(clusterIds, id)
-	}
-
 	var wg sync.WaitGroup
 
 	loadingRules := &clientcmd.ClientConfigLoadingRules{
@@ -100,8 +112,10 @@ func main() {
 		panic(err)
 	}
 
-	for clusterId, measurements := range clusterMeasurements {
-		go startSameClusterMeasurements(clusterId, measurements, *config, ctx, &wg)
+	// Start measurements for each cluster concurrently
+	for _, cluster := range cfg.Clusters {
+		wg.Add(1)
+		go startSameClusterMeasurements(cluster, *config, ctx, &wg)
 	}
 	wg.Wait()
 }
