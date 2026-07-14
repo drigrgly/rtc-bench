@@ -140,7 +140,7 @@ func startMeasurement(cluster *Cluster, measurement Measurement) {
 		slog.Info("Fetching prometheus data", "measurement", measurement.Name)
 		individualMeasurementMetaData.BufferTime = 5 * time.Minute
 
-		clusterCollectionName := fmt.Sprintf("%s-%s", cluster.ClusterId, metaData.InitialStartTime.Format("2006-01-01"))
+		clusterCollectionName := fmt.Sprintf("%s-%s", cluster.ClusterId, metaData.InitialStartTime.Format("2006-01-02"))
 		hours, minutes, sec := metaData.InitialStartTime.Clock()
 		measurementCollectionName := fmt.Sprintf("%s-%s", metaData.Measurement.Name, fmt.Sprintf("%02d%02d%02d", hours, minutes, sec))
 
@@ -152,6 +152,7 @@ func startMeasurement(cluster *Cluster, measurement Measurement) {
 		savePrometheusData(cluster, &metaData, i)
 	}
 
+	saveMetadata(&metaData)
 	slog.Info("Measurement completed", "measurement", measurement.Name)
 }
 
@@ -193,7 +194,6 @@ func savePrometheusData(cluster *Cluster, measurementMetaData *MeasurementMetaDa
 		runPrometheusQuery(cluster.Host, query.Query, outputFile, startTime, endTime)
 	}
 
-	saveMetadata(measurementMetaData)
 	slog.Info("Prometheus data saved", "directory", measurementMetaData.CollectionOutputDir)
 }
 

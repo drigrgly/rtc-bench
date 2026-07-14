@@ -30,9 +30,16 @@ func FormatMeasurementInfo(measurementMetaData *MeasurementMetaData) string {
 	connectionInfo := FormatConnectionInfo(measurementMetaData.TurncatClientAddress, measurementMetaData.TurnServerAddress, measurementMetaData.PeerAddress)
 
 	sb.WriteString("--- Measurement Information ---\n")
+	sb.WriteString(fmt.Sprintf("Measurement name: %s\n", measurementMetaData.Measurement.Name))
+	sb.WriteString(fmt.Sprintf("Measurement start: %s\n", measurementMetaData.InitialStartTime.Format("2006.01.02 15:04:05")))
+	sb.WriteString(fmt.Sprintf("Repeats: %d\n", measurementMetaData.Measurement.Repeat))
+	sb.WriteString("-------------------------------\n")
+
+	sb.WriteString("\n")
+	sb.WriteString("------ Query Information ------\n")
 	sb.WriteString("Queries:\n")
 	for _, query := range measurementMetaData.Measurement.Queries {
-		sb.WriteString(fmt.Sprintf("  - %s\n", query.Name))
+		sb.WriteString(fmt.Sprintf("  - %s: %s\n", query.Name, query.Query))
 	}
 	sb.WriteString("-------------------------------\n")
 	sb.WriteString("\n")

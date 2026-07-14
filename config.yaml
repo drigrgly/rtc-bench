@@ -25,3 +25,10 @@ clusters:
           command: iperf
           args: ["-c", *host, "-p", *turnPort, "-u", "-i", "1", "-l", "100", "-b", "800000", "-t", "2", "-e"]
         queries: *queries
+      - name: long-measurement
+        repeat: 2
+        offloading: TC # TC: eBPF/TC | XDP: eBPF/XDP | NONE: no offloading
+        load-generator: 
+          command: iperf
+          args: ["-c", *host, "-p", *turnPort, "-u", "-i", "1", "-l", "100", "-b", "800000", "-t", "30", "-e"]
+        queries: *queries
