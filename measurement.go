@@ -16,6 +16,9 @@ import (
 	promApi "github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -84,16 +87,33 @@ func StartSameClusterMeasurements(cluster *Cluster, config *kubeApi.Config, ctx 
 	cluster.TurnServer.Port = turnPort
 
 	for _, measurement := range cluster.Measurements {
-		startMeasurement(cluster, measurement)
+		startMeasurement(cluster, measurement, clientset, dynClient, ctx)
 	}
 
 }
 
-func startMeasurement(cluster *Cluster, measurement Measurement) {
+func startMeasurement(cluster *Cluster, measurement Measurement, clientset *kubernetes.Clientset, dyn dynamic.Interface, ctx context.Context) {
 	metaData := MeasurementMetaData{
 		InitialStartTime: time.Now(),
 		Measurement:      &measurement,
 	}
+
+	// Set the offloading trough the dataplane object
+	gvr := schema.GroupVersionResource{
+		Group:    "stunner.l7mp.io",
+		Version:  "v1",
+		Resource: "dataplanes",
+	}
+
+	dataplaneObject, err := dyn.Resource(gvr).
+		Namespace("stunner-system").
+		Get(ctx, "default", metav1.GetOptions{})
+	if err != nil {
+		slog.Error(err.Error())
+		panic(err)
+	}
+
+	unstructured.SetNestedField(dataplaneObject.Object, measurement.Offloading, "spec", "offloadEngine")
 
 	// Construct the client server address
 	turncatClientAddress := fmt.Sprintf("udp://%s:%s", cluster.TurncatClient.Host, cluster.TurncatClient.Port)
