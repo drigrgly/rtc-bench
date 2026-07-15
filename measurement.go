@@ -105,8 +105,9 @@ func startMeasurement(cluster *Cluster, measurement Measurement, clientset *kube
 		Resource: "dataplanes",
 	}
 
+	slog.Info("asd", "object", gvr)
+
 	dataplaneObject, err := dyn.Resource(gvr).
-		Namespace("stunner-system").
 		Get(ctx, "default", metav1.GetOptions{})
 	if err != nil {
 		slog.Error(err.Error())
@@ -114,6 +115,15 @@ func startMeasurement(cluster *Cluster, measurement Measurement, clientset *kube
 	}
 
 	unstructured.SetNestedField(dataplaneObject.Object, measurement.Offloading, "spec", "offloadEngine")
+
+	// Update the dataplane object with the new offloading setting
+	_, err = dyn.Resource(gvr).Update(ctx, dataplaneObject, metav1.UpdateOptions{})
+	if err != nil {
+		slog.Error(err.Error())
+		panic(err)
+	}
+
+	slog.Info("Offloading set to", "offloading", measurement.Offloading)
 
 	// Construct the client server address
 	turncatClientAddress := fmt.Sprintf("udp://%s:%s", cluster.TurncatClient.Host, cluster.TurncatClient.Port)
