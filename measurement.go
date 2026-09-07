@@ -95,8 +95,6 @@ func startMeasurement(cluster *Cluster, measurement Measurement, clientset *kube
 		Resource: "dataplanes",
 	}
 
-	slog.Info("asd", "object", gvr)
-
 	dataplaneObject, err := dyn.Resource(gvr).
 		Get(ctx, "default", metav1.GetOptions{})
 	if err != nil {

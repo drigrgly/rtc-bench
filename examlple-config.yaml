@@ -17,7 +17,7 @@ clusters:
     measurements:
       - name: short-measurement
         repeat: 4
-        offloading: NONE # TC: eBPF/TC | XDP: eBPF/XDP | NONE: no offloading
+        offloading: None # TC: eBPF/TC | XDP: eBPF/XDP | None: no offloading
         load-generator: 
           command: iperf
           args: ["-c", *host, "-p", *turnPort, "-u", "-i", "1", "-l", "1420", "-b", "800000", "-t", "2", "-e"] # Use &turnHost instead of host, 

@@ -31,6 +31,7 @@ func FormatMeasurementInfo(measurementMetaData *MeasurementMetaData) string {
 	sb.WriteString("--- Measurement Information ---\n")
 	sb.WriteString(fmt.Sprintf("Measurement name: %s\n", measurementMetaData.Measurement.Name))
 	sb.WriteString(fmt.Sprintf("Measurement start: %s\n", measurementMetaData.InitialStartTime.Format("2006.01.02 15:04:05")))
+	sb.WriteString(fmt.Sprintf("Offloading: %s\n", measurementMetaData.Measurement.Offloading))
 	sb.WriteString(fmt.Sprintf("Repeats: %d\n", measurementMetaData.Measurement.Repeat))
 	sb.WriteString("-------------------------------\n")
 
