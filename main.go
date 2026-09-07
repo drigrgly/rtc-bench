@@ -26,7 +26,6 @@ type Cluster struct {
 	TurncatClient TurncatClient `mapstructure:"turncat-client"`
 	TurnServer    TurnServer    `mapstructure:"turn-server"` //Debug and documentation purposes
 	Measurements  []Measurement `mapstructure:"measurements"`
-	Peer          Peer          `mapstructure:"peer"` //Debug and documentation purposes
 }
 
 type TurncatClient struct {
@@ -36,11 +35,6 @@ type TurncatClient struct {
 }
 
 type TurnServer struct {
-	Host string `mapstructure:"host"`
-	Port string `mapstructure:"port"`
-}
-
-type Peer struct {
 	Host string `mapstructure:"host"`
 	Port string `mapstructure:"port"`
 }
@@ -68,7 +62,6 @@ type MeasurementMetaData struct {
 	CollectionOutputDir    string
 	TurncatClientAddress   string
 	TurnServerAddress      string
-	PeerAddress            string
 	InitialStartTime       time.Time
 	IndividualMeasurements []IndividualMeasurementMetaData
 }

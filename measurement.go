@@ -59,16 +59,6 @@ func StartSameClusterMeasurements(cluster *Cluster, config *kubeApi.Config, ctx 
 		panic(err)
 	}
 
-	// Get Iperf cluster peer address
-	peerHost, peerPort, err := getIperfServerClusterIP(clientset, ctx, true)
-	if err != nil {
-		slog.Error("Error fetching Iperf server cluster IP", "error", err)
-		panic(err)
-	}
-
-	cluster.Peer.Host = peerHost
-	cluster.Peer.Port = peerPort
-
 	// Get the TURN server IP and port
 	turnIP, err := getTurnServerIP(clientset, ctx)
 	if err != nil {
@@ -101,15 +91,11 @@ func startMeasurement(cluster *Cluster, measurement Measurement) {
 	// Redact the password in the log
 	redactedTurnServerAddress := fmt.Sprintf("turn://%s:%s@%s:%s?transport=udp", "***", "***", cluster.TurnServer.Host, cluster.TurnServer.Port)
 
-	// Construct the peer address
-	peerAddress := fmt.Sprintf("udp://%s:%s", cluster.Peer.Host, cluster.Peer.Port)
-
 	//Save information about the measurement
 	metaData.TurncatClientAddress = turncatClientAddress
 	metaData.TurnServerAddress = redactedTurnServerAddress
-	metaData.PeerAddress = peerAddress
 
-	LogFormatted(FormatConnectionInfo(turncatClientAddress, redactedTurnServerAddress, peerAddress))
+	LogFormatted(FormatConnectionInfo(turncatClientAddress, redactedTurnServerAddress))
 
 	for _, i := 0, 0; i < measurement.Repeat; i++ {
 		// Save information about each individual measurement

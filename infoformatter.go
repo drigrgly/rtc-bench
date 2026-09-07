@@ -6,14 +6,13 @@ import (
 	"strings"
 )
 
-func FormatConnectionInfo(turncatClientAddress, turnServerAddress, peerAddress string) string {
+func FormatConnectionInfo(turncatClientAddress, turnServerAddress string) string {
 
 	var sb strings.Builder
 
 	sb.WriteString("---- Connection Information ---\n")
 	sb.WriteString(fmt.Sprintf("Turncat Client Address: %s\n", turncatClientAddress))
 	sb.WriteString(fmt.Sprintf("Turn Server Address: %s\n", turnServerAddress))
-	sb.WriteString(fmt.Sprintf("Peer Address: %s\n", peerAddress))
 	sb.WriteString("-------------------------------\n")
 	return sb.String()
 }
@@ -27,7 +26,7 @@ func LogFormatted(formattedString string) {
 
 func FormatMeasurementInfo(measurementMetaData *MeasurementMetaData) string {
 	var sb strings.Builder
-	connectionInfo := FormatConnectionInfo(measurementMetaData.TurncatClientAddress, measurementMetaData.TurnServerAddress, measurementMetaData.PeerAddress)
+	connectionInfo := FormatConnectionInfo(measurementMetaData.TurncatClientAddress, measurementMetaData.TurnServerAddress)
 
 	sb.WriteString("--- Measurement Information ---\n")
 	sb.WriteString(fmt.Sprintf("Measurement name: %s\n", measurementMetaData.Measurement.Name))

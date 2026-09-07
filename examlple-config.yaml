@@ -1,0 +1,31 @@
+queries: &queries # Queries to be executed on the cluster. The results will be stored in the measurement results.
+  - name: cpu-usage
+    query: sum(rate(container_cpu_usage_seconds_total[5m])) by (namespace)
+  - name: memory-usage
+    query: sum(container_memory_working_set_bytes) by (namespace) / 1024 / 1024 / 1024
+
+clusters:
+  - cluster-id: unique-id
+    host: &host 192.168.1.1
+    turncat-client:
+      log: "all:INFO"
+      host: *host  # You can reference another IP if the turncat relay is deployed elsewhere, e.g. &turnHost 192.168.1.2
+      port: &turnPort 5000
+    turn-server: # Filled by the go script if left empty
+      host: 
+      port: 
+    measurements:
+      - name: short-measurement
+        repeat: 4
+        offloading: NONE # TC: eBPF/TC | XDP: eBPF/XDP | NONE: no offloading
+        load-generator: 
+          command: iperf
+          args: ["-c", *host, "-p", *turnPort, "-u", "-i", "1", "-l", "1420", "-b", "800000", "-t", "2", "-e"] # Use &turnHost instead of host, 
+        queries: *queries
+      - name: long-measurement
+        repeat: 2
+        offloading: TC # TC: eBPF/TC | XDP: eBPF/XDP | NONE: no offloading
+        load-generator: 
+          command: iperf
+          args: ["-c", *host, "-p", *turnPort, "-u", "-i", "1", "-l", "100", "-b", "800000", "-t", "30", "-e"]
+        queries: *queries

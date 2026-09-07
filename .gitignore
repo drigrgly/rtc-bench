@@ -24,8 +24,9 @@ profile.cov
 go.work
 go.work.sum
 
-# env file
+# env and configuration file
 .env
+config.yaml
 
 # results folder
 results/

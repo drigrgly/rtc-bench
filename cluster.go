@@ -11,20 +11,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func getIperfServerClusterIP(clientset *kubernetes.Clientset, ctx context.Context, isUdp bool) (string, string, error) {
-	iperfSvc, err := clientset.CoreV1().
-		Services("default").
-		Get(ctx, "iperf-server", metav1.GetOptions{})
-	if err != nil {
-		return "", "", err
-	}
-
-	peerIP := iperfSvc.Spec.ClusterIP
-	peerPort := iperfSvc.Spec.Ports[0].Port
-
-	return peerIP, fmt.Sprintf("%d", peerPort), nil
-}
-
 func getTurnServerIP(clientset *kubernetes.Clientset, ctx context.Context) (string, error) {
 
 	svc, err := clientset.CoreV1().
