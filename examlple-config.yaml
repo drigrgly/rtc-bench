@@ -15,14 +15,16 @@ clusters:
       host: 
       port: 
     measurements:
-      - name: short-measurement
+      - name: short-benchmark
+        buffer-seconds: 60 # How much time should be queried before and after the actual benchmark
         repeat: 4
         offloading: None # TC: eBPF/TC | XDP: eBPF/XDP | None: no offloading
         load-generator: 
           command: iperf
           args: ["-c", *host, "-p", *turnPort, "-u", "-i", "1", "-l", "1420", "-b", "800000", "-t", "2", "-e"] # Use &turnHost instead of host, 
         queries: *queries
-      - name: long-measurement
+      - name: long-benchmark
+        buffer-seconds: 60 # How much time should be queried before and after the actual benchmark 
         repeat: 2
         offloading: TC # TC: eBPF/TC | XDP: eBPF/XDP | NONE: no offloading
         load-generator: 

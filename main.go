@@ -50,6 +50,7 @@ type Measurement struct {
 	LoadGenerator LoadGenerator     `mapstructure:"load-generator"`
 	Offloading    string            `mapstructure:"offloading"`
 	Queries       []PrometheusQuery `mapstructure:"queries"`
+	BufferSeconds int               `mapstructure:"buffer-seconds"`
 }
 
 type LoadGenerator struct {
@@ -67,10 +68,10 @@ type MeasurementMetaData struct {
 }
 
 type IndividualMeasurementMetaData struct {
-	Count      int
-	StartTime  time.Time
-	EndTime    time.Time
-	BufferTime time.Duration
+	Count         int
+	StartTime     time.Time
+	EndTime       time.Time
+	BufferSeconds time.Duration
 }
 
 func main() {

@@ -152,8 +152,7 @@ func startMeasurement(cluster *Cluster, measurement Measurement, clientset *kube
 
 		// Get data from prometheus
 		slog.Info("Fetching prometheus data", "measurement", measurement.Name)
-		individualMeasurementMetaData.BufferTime = 5 * time.Minute
-
+		individualMeasurementMetaData.BufferSeconds = time.Duration(measurement.BufferSeconds) * time.Second
 		clusterCollectionName := fmt.Sprintf("%s-%s", cluster.ClusterId, metaData.InitialStartTime.Format("2006-01-02"))
 		hours, minutes, sec := metaData.InitialStartTime.Clock()
 		measurementCollectionName := fmt.Sprintf("%s-%s", metaData.Measurement.Name, fmt.Sprintf("%02d%02d%02d", hours, minutes, sec))
@@ -180,7 +179,7 @@ func savePrometheusData(cluster *Cluster, measurementMetaData *MeasurementMetaDa
 	currentRepeatData := measurementMetaData.IndividualMeasurements[count]
 	startTime := currentRepeatData.StartTime
 	endTime := currentRepeatData.EndTime
-	bufferTime := currentRepeatData.BufferTime
+	bufferTime := currentRepeatData.BufferSeconds
 
 	// Add buffer time before start and after end to capture metrics
 	bufferedStart := startTime.Add(-bufferTime)
