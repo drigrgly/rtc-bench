@@ -192,7 +192,7 @@ func savePrometheusData(cluster *Cluster, measurementMetaData *MeasurementMetaDa
 	duration := endTime.Sub(startTime)
 	durationStr := duration.String()
 
-	slog.Info("Running styx query", "start", startStr, "duration", durationStr)
+	slog.Info("Running prometheus query", "start", startStr, "duration", durationStr)
 
 	queries := measurementMetaData.Measurement.Queries
 
