@@ -17,6 +17,7 @@ clusters:
     measurements:
       - name: short-benchmark
         buffer-seconds: 60 # How much time should be queried before and after the actual benchmark
+        resolution: 0.1 # How many seconds there should be between the points
         repeat: 4
         offloading: None # TC: eBPF/TC | XDP: eBPF/XDP | None: no offloading
         load-generator: 
@@ -25,6 +26,7 @@ clusters:
         queries: *queries
       - name: long-benchmark
         buffer-seconds: 60 # How much time should be queried before and after the actual benchmark 
+        resolution: 0.1 # How many seconds there should be between the points
         repeat: 2
         offloading: TC # TC: eBPF/TC | XDP: eBPF/XDP | NONE: no offloading
         load-generator: 

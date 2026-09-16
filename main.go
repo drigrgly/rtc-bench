@@ -51,6 +51,7 @@ type Measurement struct {
 	Offloading    string            `mapstructure:"offloading"`
 	Queries       []PrometheusQuery `mapstructure:"queries"`
 	BufferSeconds int               `mapstructure:"buffer-seconds"`
+	Resolution    float32           `mapstructure:"resolution"`
 }
 
 type LoadGenerator struct {
@@ -72,6 +73,7 @@ type IndividualMeasurementMetaData struct {
 	StartTime     time.Time
 	EndTime       time.Time
 	BufferSeconds time.Duration
+	Resolution    time.Duration
 }
 
 func main() {

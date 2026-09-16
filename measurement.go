@@ -128,7 +128,8 @@ func startMeasurement(cluster *Cluster, measurement Measurement, clientset *kube
 	for _, i := 0, 0; i < measurement.Repeat; i++ {
 		// Save information about each individual measurement
 		individualMeasurementMetaData := IndividualMeasurementMetaData{
-			Count: i,
+			Count:      i,
+			Resolution: time.Duration(measurement.Resolution) * time.Millisecond,
 		}
 
 		// Save start time
@@ -204,16 +205,19 @@ func savePrometheusData(cluster *Cluster, measurementMetaData *MeasurementMetaDa
 		}
 
 		outputFile := filepath.Join(outputDir, fmt.Sprintf("%s-%d.csv", query.Name, count))
-		runPrometheusQuery(cluster.Host, query.Query, outputFile, startTime, endTime)
+
+		resolution := currentRepeatData.Resolution
+
+		runPrometheusQuery(cluster.Host, query.Query, outputFile, startTime, endTime, resolution)
 	}
 
 	slog.Info("Prometheus data saved", "directory", measurementMetaData.CollectionOutputDir)
 }
 
-func runPrometheusQuery(host, query, outputFile string, start, end time.Time) {
+func runPrometheusQuery(host, query, outputFile string, start, end time.Time, resolution time.Duration) {
 	// --- Config ---
 	prometheusURL := fmt.Sprintf("http://%s:9090", host)
-	step := 1 * time.Second
+	step := resolution
 
 	// --- Prometheus client ---
 	client, err := promApi.NewClient(promApi.Config{Address: prometheusURL})
