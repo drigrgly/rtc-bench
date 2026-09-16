@@ -271,8 +271,6 @@ func runPrometheusQuery(host, query, outputFile string, start, end time.Time, re
 
 	headers := append([]string{"timestamp"}, namespaces...)
 
-	slog.Info(strings.Join(headers, ", "))
-
 	//create a map of namespace to values
 	namespaceValues := map[string][]model.SamplePair{}
 
@@ -288,8 +286,6 @@ func runPrometheusQuery(host, query, outputFile string, start, end time.Time, re
 			maxValueNumbers = len(values)
 		}
 	}
-
-	slog.Info(strings.Join(headers, ","))
 
 	// --- Write CSV ---
 	f, err := os.Create(outputFile)
