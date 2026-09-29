@@ -101,12 +101,14 @@ func main() {
 	// Find and read the config file
 	err := viper.ReadInConfig()
 	if err != nil {
+		slog.Error("fatal error config file: %w", "error", err)
 		panic(fmt.Errorf("fatal error config file: %w", err))
 	}
 
 	// Unmarshal the config into the struct
 	err = viper.Unmarshal(&cfg)
 	if err != nil {
+		slog.Error("fatal error unmarshaling file: %w", "error", err)
 		panic(fmt.Errorf("fatal error unmarshaling file: %w", err))
 	}
 
