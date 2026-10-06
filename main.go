@@ -98,6 +98,7 @@ func main() {
 
 	var cfg Config
 
+	slog.Info("Reading config file...")
 	// Find and read the config file
 	err := viper.ReadInConfig()
 	if err != nil {

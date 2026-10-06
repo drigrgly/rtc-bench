@@ -3,14 +3,19 @@ queries: &queries # Queries to be executed on the cluster. The results will be s
     query: sum(rate(container_cpu_usage_seconds_total[5m])) by (namespace)
   - name: memory-usage
     query: sum(container_memory_working_set_bytes) by (namespace) / 1024 / 1024 / 1024
-  - name: network-receive
-    query: sum(rate(container_network_receive_bytes_total[5m])) by (namespace)
-  - name: network-transmit
-    query: sum(rate(container_network_transmit_bytes_total[5m])) by (namespace)
-  - name: receive-errors
-    query: sum(rate(container_network_receive_errors_total[5m])) by (namespace)
-  - name: transmit-errors
-    query: sum(rate(container_network_transmit_errors_total[5m])) by (namespace)
+  - name: receive-bandwidth
+    query: sum((8 * rate(container_network_receive_bytes_total{job="kubelet", metrics_path="/metrics/cadvisor", cluster="", namespace=~".+"}[2m0s]))) by (namespace)
+  - name: transmit-bandwidth
+    query: sum((8 * rate(container_network_transmit_bytes_total{job="kubelet", metrics_path="/metrics/cadvisor", cluster="", namespace=~".+"}[2m0s]))) by (namespace)
+  - name: rate-of-received-packets
+    query: sum(rate(container_network_receive_packets_total{job="kubelet", metrics_path="/metrics/cadvisor", cluster="", namespace=~".+"}[2m0s])) by (namespace)
+  - name: rate-of-transmitted-packets
+    query: sum(rate(container_network_transmit_packets_total{job="kubelet", metrics_path="/metrics/cadvisor", cluster="", namespace=~".+"}[2m0s])) by (namespace)
+  - name: rate-of-received-packets-dropped
+    query: sum(rate(container_network_receive_packets_dropped_total{job="kubelet", metrics_path="/metrics/cadvisor", cluster="", namespace=~".+"}[2m0s])) by (namespace)
+  - name: rate-of-transmitted-packets-dropped
+    query: sum(rate(container_network_transmit_packets_dropped_total{job="kubelet", metrics_path="/metrics/cadvisor", cluster="$cluster", namespace=~".+"}[2m0s])) by (namespace)
+
 clusters:
   - cluster-id: unique-id
     host: &host 192.168.1.1
