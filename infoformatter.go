@@ -36,15 +36,19 @@ func FormatMeasurementInfo(measurementMetaData *MeasurementMetaData) string {
 	sb.WriteString("-------------------------------\n")
 
 	sb.WriteString("\n")
-	sb.WriteString("------ Query Information ------\n")
-	sb.WriteString("Queries:\n")
-	for _, query := range measurementMetaData.Measurement.Queries {
-		sb.WriteString(fmt.Sprintf("  - %s: %s\n", query.Name, query.Query))
-	}
-	sb.WriteString("-------------------------------\n")
-	sb.WriteString("\n")
+
 	sb.WriteString(connectionInfo)
+
 	sb.WriteString("\n")
+
+	sb.WriteString("---- Load generator output ----\n")
+	sb.WriteString(fmt.Sprintf("Command: %s\nArgs: %s", measurementMetaData.Measurement.LoadGenerator.Command, strings.Join(measurementMetaData.Measurement.LoadGenerator.Args, " ")))
+	for run, measurement := range measurementMetaData.IndividualMeasurements {
+		sb.WriteString(fmt.Sprintf("\nIteration: %d\n", run+1))
+		sb.WriteString(measurement.LoadGeneratorOutput.String())
+	}
+	sb.WriteString(measurementMetaData.IndividualMeasurements[0].LoadGeneratorOutput.String())
+	sb.WriteString("-------------------------------\n")
 
 	return sb.String()
 }

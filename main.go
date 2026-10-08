@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -69,19 +71,36 @@ type MeasurementMetaData struct {
 }
 
 type IndividualMeasurementMetaData struct {
-	Count         int
-	StartTime     time.Time
-	EndTime       time.Time
-	BufferSeconds time.Duration
-	Resolution    time.Duration
+	Count               int
+	StartTime           time.Time
+	EndTime             time.Time
+	BufferSeconds       time.Duration
+	Resolution          time.Duration
+	LoadGeneratorOutput bytes.Buffer
 }
 
 func main() {
-	// Initialize logger
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	//logger := slog.New(logutils.NewCopyHandler(slog.NewTextHandler(os.Stdout, nil)))
+	// Configure logging
+	logDir := "logs"
+	filename := time.Now().Format("rtc-bench-2006-01-02-150305.log")
+
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		slog.Error("failed to create log directory", "error", err)
+	}
+
+	logFile, err := os.OpenFile(
+		filepath.Join(logDir, filename),
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY,
+		0o644,
+	)
+	if err != nil {
+		slog.Error("failed to create log file", "error", err)
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.MultiWriter(os.Stdout, logFile), nil))
 	slog.SetDefault(logger)
 
+	// Load configurations
 	var kubeconfig *string
 	if home := homedir.HomeDir(); home != "" {
 		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
@@ -100,7 +119,7 @@ func main() {
 
 	slog.Info("Reading config file...")
 	// Find and read the config file
-	err := viper.ReadInConfig()
+	err = viper.ReadInConfig()
 	if err != nil {
 		slog.Error("fatal error config file: %w", "error", err)
 		panic(fmt.Errorf("fatal error config file: %w", err))

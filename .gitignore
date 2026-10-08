@@ -32,6 +32,9 @@ config.yaml
 results/
 todo.md
 
+# logs
+logs
+
 # Editor/IDE
 # .idea/
 # .vscode/

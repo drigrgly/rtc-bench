@@ -1,21 +1,21 @@
 queries: &queries # Queries to be executed on the cluster. The results will be stored in the measurement results.
   - name: cpu-usage
-    query: sum(rate(container_cpu_usage_seconds_total[5m])) by (namespace)
+    query: sum(rate(container_cpu_usage_seconds_total{namespace="stunner"}[2m0s])) by (namespace)
   - name: memory-usage
-    query: sum(container_memory_working_set_bytes) by (namespace) / 1024 / 1024 / 1024
-  - name: receive-bandwidth
-    query: sum((8 * rate(container_network_receive_bytes_total{job="kubelet", metrics_path="/metrics/cadvisor", cluster="", namespace=~".+"}[2m0s]))) by (namespace)
-  - name: transmit-bandwidth
-    query: sum((8 * rate(container_network_transmit_bytes_total{job="kubelet", metrics_path="/metrics/cadvisor", cluster="", namespace=~".+"}[2m0s]))) by (namespace)
-  - name: rate-of-received-packets
-    query: sum(rate(container_network_receive_packets_total{job="kubelet", metrics_path="/metrics/cadvisor", cluster="", namespace=~".+"}[2m0s])) by (namespace)
-  - name: rate-of-transmitted-packets
-    query: sum(rate(container_network_transmit_packets_total{job="kubelet", metrics_path="/metrics/cadvisor", cluster="", namespace=~".+"}[2m0s])) by (namespace)
-  - name: rate-of-received-packets-dropped
-    query: sum(rate(container_network_receive_packets_dropped_total{job="kubelet", metrics_path="/metrics/cadvisor", cluster="", namespace=~".+"}[2m0s])) by (namespace)
-  - name: rate-of-transmitted-packets-dropped
-    query: sum(rate(container_network_transmit_packets_dropped_total{job="kubelet", metrics_path="/metrics/cadvisor", cluster="$cluster", namespace=~".+"}[2m0s])) by (namespace)
-
+    query: sum(avg_over_time(container_memory_working_set_bytes{namespace="stunner"}[2m0s])) by (namespace) / 1024 / 1024 / 1024
+  - name: node-receive-bandwidth
+    query: sum(rate(node_network_receive_bytes_total{device!~"lo|veth.*|cni0|docker0|br-.*|flannel.*|enx.*"}[2m0s])) * 8
+  - name: node-transmit-bandwidth
+    query: sum(rate(node_network_transmit_bytes_total{device!~"lo|veth.*|cni0|docker0|br-.*|flannel.*|enx.*"}[2m0s])) * 8
+  - name: node-received-packets
+    query: sum(rate(node_network_receive_packets_total{device!~"lo|veth.*|cni0|docker0|br-.*|flannel.*|enx.*"}[2m0s]))
+  - name: node-transmitted-packets
+    query: sum(rate(node_network_transmit_packets_total{device!~"lo|veth.*|cni0|docker0|br-.*|flannel.*|enx.*"}[2m0s]))
+  - name: node-received-packets-dropped
+    query: sum(rate(node_network_receive_drop_total{device!~"lo|veth.*|cni0|docker0|br-.*|flannel.*|enx.*"}[2m0s]))
+  - name: node-transmitted-packets-dropped
+    query: sum(rate(node_network_transmit_drop_total{device!~"lo|veth.*|cni0|docker0|br-.*|flannel.*|enx.*"}[2m0s]))
+ 
 clusters:
   - cluster-id: unique-id
     host: &host 192.168.1.1
@@ -43,5 +43,5 @@ clusters:
         offloading: TC # TC: eBPF/TC | XDP: eBPF/XDP | NONE: no offloading
         load-generator: 
           command: iperf
-          args: ["-c", *host, "-p", *turnPort, "-u", "-i", "1", "-l", "100", "-b", "800000", "-t", "30", "-e"]
+          args: ["-c", *host, "-p", *turnPort, "-u", "-i", "1", "-l", "1420", "-b", "800000", "-t", "10", "-e"]
         queries: *queries

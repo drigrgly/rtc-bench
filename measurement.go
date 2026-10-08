@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -139,7 +140,10 @@ func startMeasurement(cluster *Cluster, measurement Measurement, clientset *kube
 		slog.Info("Starting load generator", "command", measurement.LoadGenerator.Command, "args", measurement.LoadGenerator.Args)
 		loadGenerator := exec.Command(measurement.LoadGenerator.Command, measurement.LoadGenerator.Args...)
 
-		loadGenerator.Stdout = os.Stdout
+		// Saving the output for later file write, as well as sending it to stdout
+		loadGeneratorOutput := io.MultiWriter(os.Stdout, &individualMeasurementMetaData.LoadGeneratorOutput)
+
+		loadGenerator.Stdout = loadGeneratorOutput
 		err := loadGenerator.Start()
 		if err != nil {
 			panic(fmt.Errorf("fatal error starting load generator '%s': %w", measurement.LoadGenerator.Command, err))
@@ -324,7 +328,7 @@ func runPrometheusQuery(host, query, outputFile string, start, end time.Time, re
 func saveMetadata(MeasurementMetaData *MeasurementMetaData) {
 	formattedInfo := FormatMeasurementInfo(MeasurementMetaData)
 
-	f, err := os.Create(filepath.Join(MeasurementMetaData.CollectionOutputDir, "metadata.txt"))
+	f, err := os.Create(filepath.Join(MeasurementMetaData.CollectionOutputDir, "summary.txt"))
 	if err != nil {
 		panic(fmt.Sprintf("error creating metadata file: %v", err))
 	}
@@ -334,4 +338,24 @@ func saveMetadata(MeasurementMetaData *MeasurementMetaData) {
 	if err != nil {
 		panic(fmt.Sprintf("error writing metadata: %v", err))
 	}
+
+	// Copy the config file as well
+	originalConfig, err := os.Open("config.yaml")
+	if err != nil {
+		slog.Error("Could not find config file to copy", "error", err)
+		panic(fmt.Sprintf("Could not find config file to copy: %v", err))
+	}
+
+	destConfig, err := os.Create(filepath.Join(MeasurementMetaData.CollectionOutputDir, "config.yaml"))
+	if err != nil {
+		slog.Error("Could not create config file", "error", err)
+		panic(fmt.Sprintf("Could not create config file: %v", err))
+	}
+
+	_, err = io.Copy(destConfig, originalConfig)
+	if err != nil {
+		slog.Error("Could not copy config file", "error", err)
+		panic(fmt.Sprintf("Could not copy config file: %v", err))
+	}
+
 }
